@@ -12,12 +12,14 @@ from rest_framework.decorators import action
 from doorcommand.models import *
 from doorcommand.serializers import *
 from random import randrange
+from doorcommand.doorscripts.WildApricot import get_user
 
 
 class TokenAuthSupportQueryString(TokenAuthentication):
     """
     Extend the TokenAuthentication class to support querystring authentication
     in the form of "http://www.example.com/?token=<token_key>"
+    The wild apricot webhook doesn't have the option to send tokens in the body
     """
     def authenticate(self, request):
         # Check if 'token_auth' is in the request query params.
@@ -37,63 +39,73 @@ class NewUserView(views.APIView):
     authentication_classes = [TokenAuthSupportQueryString]
     permission_classes = [IsAuthenticated]
 
-
+    levels = {
+        '725879':'full-member-auto-pay',
+        '969396':'full-member-invoiced',
+        '725880':'general-member-auto-pay',
+        '969397':'general-member-invoiced',
+        '1028621':'student-membership',
+        '1064884':'student-membership-plus',
+        '725412':'guest-member'
+    }
+    
+    # Devs updated the docs for webhook status codes. I believe them to be incorrect more testing needed
+    # Dev codes [1 = Active, 2 = Lapsed, 3 = PendingRenewal, 20 = PendingNew, 30 = PendingUpgrade]
+    status = {
+        '0':"active",
+        '1':"lapsed",
+        '20':"pending-new",
+        '30':"pending-renewal",
+        '40':"pending-level-change",
+        '50':"suspended",
+    }
+    levels.update(dict(map(reversed, levels.items()))) #emulate bijective map functionality
+    status.update(dict(map(reversed, status.items()))) #you can use a value to get the key. eg. active = 0
+    
     #"Action":"StatusChanged","Contact.Id":"55254370","Membership.LevelId":"725412","Membership.Status":"20"
     def post(self, request):
         parsed = request.data['Parameters']
         if ('Membership.Status' not in parsed): 
-            return Response(status=312) #I don't have a complete list of Actions or Statuses. There might be a better check than just Status.
+            return Response(status=312) #If status isn't contained we don't care about the request.
 
         user_id = parsed["Contact.Id"]
         membership_level = parsed["Membership.LevelId"]
         membership_status = parsed["Membership.Status"]
-        
-        levels = {
-            '725879':'full-member-auto-pay',
-            '969396':'full-member-invoiced',
-            '725880':'general-member-auto pay',
-            '969397':'general-member-invoiced',
-            '1028621':'student-membership',
-            '1064884':'student-membership-plus',
-        }
-        
-        statuses = {
-            '0':"active",
-            '10':"lapsed",
-            '20':"pending-new",
-            '30':"pending-renewal",
-            '40':"pending-level-change",
-            '50':"suspended",
-        }
-        levels.update(dict(map(reversed, levels.items()))) #emulate bijective map functionality
-        statuses.update(dict(map(reversed, statuses.items()))) 
-
-        #Having done this and looking at what I used it for I now have to ask myself why...
-
-        #20 is likely (Pending-New) possibly just Pending. I don't know for sure, awaiting response from devs.
-        if(membership_status == statuses['pending-new']):
+        #new users are added to the database
+        if(membership_status == status['pending-new']):
             user = NewUserSerializer(data={
                 "user_id": user_id,
-                "status": statuses["20"]
+                "status": status["20"],
+                "level": membership_level
             })
-            
+
             if not user.is_valid():
                 return Response(status=500)
 
             user.save()
             return Response(status=200)
 
-        #Guest members can be active a check on membership level needs to be done
-        elif(membership_status == '0'):
+        elif(membership_status == status["active"]):
             user = self.queryset.get(user_id=user_id)
-            if user:
-                self.webhook(user_id)
+            
+            if(user['level'] == 'guest-member'):
+                return Response(status=400)
+
+            if(not user): 
+                fetched_user = get_user(user_id)
+                membership_level = fetched_user['MembershipLevel']['Id']
+                if(membership_level != levels['guest-member']):
+                    user = NewUserSerializer(data={
+                        "user_id": user_id,
+                        "status": status["20"],
+                        "level": membership_level
+                    })
+            else:
                 user.status = 'active'
                 user.save()
-            else:
-                subprocess.call(['python', 'doorcommand/doorscripts/subscribePassToDoor.py'])
-
-                self.webhook(user_id, True)
+            
+            subprocess.call(['python', 'doorcommand/doorscripts/subscribePassToDoor.py'])
+            self.webhook(user_id, True)
             return Response(status=200)
 
         return Response(status=412)
@@ -152,7 +164,7 @@ class NewUserView(views.APIView):
 class RandPassView(views.APIView):
     queryset = NewUser.objects.all()
     serializer_class = TmpPassSerializer
-    
+
     def get(self, request, *args, **kwargs):
         random_num = randrange(1000,9999)
         user = None

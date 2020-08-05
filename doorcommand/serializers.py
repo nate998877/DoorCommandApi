@@ -4,7 +4,7 @@ from doorcommand.models import *
 class NewUserSerializer(HyperlinkedModelSerializer):
     class Meta:
         model = NewUser
-        fields = ['user_id', 'status']
+        fields = ['user_id', 'status', 'level']
 
 class TmpPassSerializer(HyperlinkedModelSerializer):
     class Meta:
