@@ -1,0 +1,18 @@
+Notes about new user process.
+
+Program recieves webhook event (New user pending) process.
+User data fetched from API
+
+IF New & paid:
+add to local DB
+
+IF Activated:
+check local db -> Activate
+||
+check website -> check notes 
+|
+V
+IF Existing & Paid Member before:
+  Activate
+
+IF not paid member before

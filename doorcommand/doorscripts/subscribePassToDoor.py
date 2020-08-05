@@ -1,7 +1,7 @@
 import socket
 import sys
 import time
-import time
+import argparse
 
 
 
@@ -210,14 +210,30 @@ def clearr(c, sock):
 
 
 def main():
-    HOST, PORT = "localhost", 62000
+    parser = argparse.ArgumentParser()
+    parser.add_argument('password', type=int)
+    parser.add_argument('command', type=int)
+    parser.add_argument('--card_id', type=int)
+    parser.add_argument('--level', type=int)
+    args = vars(parser.parse_args())
+
+    card = args['card_id']
+    password = args['password']
+    command = args['command']
+    
+    HOST, PORT = "", 62000
     c = Controller('e63a')
-    card = ''
-    # with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as sock:
-    #     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    #     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    #     sock.bind(('', PORT))
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.bind((HOST, PORT))
         
+        if(args['level'] == 0):
+            pass
+        elif(args['level'] == 1):
+            pass
+        elif(args['level'] == 2):
+            pass
         # clearr(c, sock)
         
             #7e3ae6 07110100 8fbe 78 01 2108 9f29 01 40e2 0100000000000000000000000014050d

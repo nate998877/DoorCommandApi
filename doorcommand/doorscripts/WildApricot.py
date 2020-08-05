@@ -4,7 +4,6 @@ import json
 
 
 def Method_A(contact_id):
-    apikey = 'gfok08m5jfmwlr2zmw72l2bv04y566'
     headers = {
         'Authorization': 'Basic ' + b64encode(bytes('APIKEY:' + apikey, 'utf-8')).decode("utf-8"),
         'Content-type': 'application/x-www-form-urlencoded'
