@@ -9,8 +9,11 @@ add to local DB
 IF Activated:
 check local db -> Activate
 ||
-check website
+check website -> Activate
 |
 V
+
+Guest members not saved in database
+members who are suspended or lapsed still saved
 IF Existing & Paid Member before:
   Activate
