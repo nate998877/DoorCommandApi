@@ -21,6 +21,7 @@ from .models import *
 from rest_framework import routers
 from doorcommand.views import *
 
+#testing from here on out
 
 
 
@@ -29,3 +30,4 @@ urlpatterns = [
     path('newuser/', NewUserView.as_view()),
     path('pass/', RandPassView.as_view()),
 ]
+

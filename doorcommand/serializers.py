@@ -10,3 +10,7 @@ class TmpPassSerializer(HyperlinkedModelSerializer):
     class Meta:
         model = NewUser
         fields = ['tmp_pass']
+
+class UserSerializer(HyperlinkedModelSerializer):
+    class Meta:
+        model = NewUser
