@@ -1,18 +1,25 @@
+import os
+import rest_framework
+from doorcommand.serializers import (
+    NewUserSerializer,
+    # UserSerializer,
+    TmpPassSerializer
+)
 from doorcommand.doorscripts.subscribePassToDoor import Door_Controller
 from doorcommand.doorscripts.WildApricot import Apricot
+from doorcommand.models import NewUser, User
 from random import randrange
-from doorcommand.serializers import *
-from doorcommand.models import *
 # from rest_framework.decorators import action
-import rest_framework
 from rest_framework.response import Response
-from rest_framework import views, viewsets
-import subprocess
-import os
-from base64 import b64encode
-import requests
+from rest_framework import views
+import logging
+
+from threading import Thread
+
 from dotenv import load_dotenv
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 class TokenAuthSupportQueryString(rest_framework.authentication.TokenAuthentication):
@@ -37,9 +44,7 @@ class NewUserView(views.APIView):
     serializer_class = NewUserSerializer
     authentication_classes = [TokenAuthSupportQueryString]
     permission_classes = [rest_framework.permissions.IsAuthenticated]
-    
     apricot = Apricot()
-
 
     def post(self, request):
         parsed = request.data['Parameters']
@@ -47,56 +52,40 @@ class NewUserView(views.APIView):
             # If status isn't contained we don't care about the request.
             return Response(status=312)
 
-        print(parsed)
-
         user_id = int(parsed["Contact.Id"])
         membership_level = int(parsed["Membership.LevelId"])
         membership_status = int(parsed["Membership.Status"])
 
+        print(parsed)
+
+        def save_user():
+            user = NewUserSerializer(data={
+                "user_id": user_id,
+                "status": NewUser.PENDINGNEW,
+                "level": membership_level
+            })
+
+            if not user.is_valid():
+                return Response(status=500)
+
+            user.save()
+            return user
+
         # if(membership_level == NewUser.GUESTMEMBER):
         #     return Response(status=401)
-            
-        #TODO: delete this For debugging ^ re-enable once done
-        if(membership_level == NewUser.GUESTMEMBER):
-            user = NewUserSerializer(data={
-                "user_id": user_id,
-                "status": NewUser.PENDINGNEW,
-                "level": membership_level
-            })
+        try:
+            user = User.objects.get(user_id=user_id)
+            if(user):
+                #TODO: handle handle users looking to get new card/update pass
+                return Response(200)
+        except:
+            pass
 
-            if not user.is_valid():
-                return Response(status=500)
-
-            user.save()
-            return Response(status=200)
-        
-        
-        
-        
-            
-        
-        
-        user = User.objects.get(user_id=user_id)
-        if(user):
-            #TODO: handle handle users looking to reset pass this will probably be passed to a different function
-            return Response(200)
-
-
-        if(membership_status == NewUser.PENDINGNEW):
-            user = NewUserSerializer(data={
-                "user_id": user_id,
-                "status": NewUser.PENDINGNEW,
-                "level": membership_level
-            })
-            
-            #TODO: Log this
-            if not user.is_valid():
-                return Response(status=500)
-
-            user.save()
+        if(int(membership_status) == int(NewUser.PENDINGNEW)):
+            save_user()
             return Response(status=200)
 
-        elif(membership_status == NewUser.ACTIVE):
+        elif(int(membership_status) == int(NewUser.ACTIVE)):
             user = self.queryset.get(user_id=user_id)
 
             if(not user):
@@ -112,14 +101,14 @@ class NewUserView(views.APIView):
                     if not user.is_valid():
                         return Response(status=500)
             else:
-                user.status = 'active'
+                user.status = NewUser.ACTIVE
             user.save()
-            
+
             self.apricot.add_user_to_cardgroup(user_id)
 
             return Response(status=200)
 
-        #if user isn't new, isn't active, isn't already added to db then what are they?
+        #if user isn't new, isn't active, isn't already added to db, yet triggered the webhook then what are they?
         #TODO: Log this
         return Response(status=412)
 
@@ -143,22 +132,29 @@ class RandPassView(views.APIView):
     """
     queryset = NewUser.objects.all()
     serializer_class = TmpPassSerializer
+    dc = Door_Controller('e63a')
 
-    def get(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         random_num = randrange(1000, 9999)
         user = None
         try:
             if request.data:
                 user = self.queryset.get(user_id=request.data['userId'])
-            if user.status == 'active':
+            if int(user.status) == int(NewUser.ACTIVE):
                 user.tmp_pass = random_num
+
                 #TODO: change this to just call the script it doesn't need to be a subprocess
-                subprocess.call(
-                    ['python', 'doorcommand/doorscripts/subscribePassToDoor.py', random_num])
-                
+
                 user.save()
-                return Response({"success": True, "randpass": random_num})
-                
+                x = Thread(target=self.dc.upload_one_time_passwords, args=([os.getenv('ADMIN_ACCESS_CODE'), random_num],))
+                x.start()
+                data = {"success": True, "randpass": random_num}
+                print(data)
+                return Response(data)
         except:
             #TODO: add comprehensive response for no user found/incorrect data
             return Response(status=404)
+        return Response(status=200)
+
+    def options(self, requests, *args, **kwarsg):
+        return Response(status=200)

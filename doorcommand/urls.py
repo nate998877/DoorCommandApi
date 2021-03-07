@@ -17,17 +17,16 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, re_path
 from django.conf.urls import url, include
-from .models import *
 from rest_framework import routers
-from doorcommand.views import *
+from doorcommand.models import NewUser, User
+from doorcommand.views import NewUserView, RandPassView
 
-#testing from here on out
 
-
+admin.site.register(NewUser)
+admin.site.register(User)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('newuser/', NewUserView.as_view()),
     path('pass/', RandPassView.as_view()),
 ]
-

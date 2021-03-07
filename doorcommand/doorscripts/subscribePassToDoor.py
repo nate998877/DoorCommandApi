@@ -6,10 +6,34 @@ import time
 # import re
 import datetime
 
+# TODO: document/explain hardcoded and/or unique non-passed variables.
+# TODO: Ensure hardcode values are actually hardcoded. Some values change after specifc events
+# TODO: add unit tests.
 
 # BEWARE HERE BE SERPENTS, HEX, BINARY, HARDCODED NONSENSE, AND THE RAMBLINGS OF A MADMAN!
 
+
 class Command_Constructor:
+    class Function_Bytes:
+        amend_directive = 'F410'
+        get_latest_index = '108C'
+        read_command = 'F110'
+        read_operation_status = '8110'
+        l_door_open = '9D10'
+        set_time = '8B10'
+        set_door_control_param = '8F10'
+        clear_domain = '9310'
+        read_domain = '9510'
+        tail_plus_permissions = '9B10'
+        modify_permissions = '0711'
+        delete_an_authority = '0811'
+        read_control_time = '9610'
+        modificaiton_time = '9710'
+        read_latest_record = '8D10'
+        remove_record = '8E10'
+        ip_search = '0111'
+        read_records = 'F810'
+
     def __init__(self, serial_number, address_byte):
         """Init Command Constructor
 
@@ -17,40 +41,21 @@ class Command_Constructor:
             serial_number (Str): Controller ID, located on PCB
             address_byte (Str): I don't know it's use yet, but it's here.
         """
-
-        # utf-8(str) to hex(str)
+        self.function_bytes = self.Function_Bytes()
         self.serial_number = self._to_little_endian(serial_number)
         self.address_byte = self._to_little_endian(address_byte)
-        self.function_bytes_dict = {
-            "amend_directive": 'F410',
-            "get_latest_index": '108C',
-            "read_command": 'F110',
-            "read_operation_status": '8110',
-            "l_door_open": '9D10',
-            "set_time": '8B10',
-            "set_door_control_param": '8F10',
-            "clear_domain": '9310',
-            "read_domain": '9510',
-            "tail_plus_permissions": '9B10',
-            "modify_permissions": '0711',
-            "delete_an_authority": '0811',
-            "read_control_time": '9610',
-            "modificaiton_time": '9710',
-            "read_latest_record": '8D10',
-            "remove_record": '8E10',
-            "ip_search": '0111',
-            "read_records": 'F810'
-        }
 
     def construct_command(self, **kwargs):
-        """ !!@!!WARNING: ORDER OF INPUT VARIABLES IS IMPORTANT TO PROPER COMMAND CREATION !!@!! """
+        """ !!@!! WARNING: ORDER OF INPUT VARIABLES IS IMPORTANT TO PROPER COMMAND CREATION !!@!! """
         """Constructs a door controller command
 
         Returns:
             command (Str): A command ready to be sent to door controller
         """
-        if 'card' in kwargs:
-            kwargs['card'] = self._password_to_hex(kwargs['card'])
+        print(kwargs)
+        if 'password' in kwargs:
+            kwargs['password'] = self._password_to_hex(kwargs['password'])
+        print(kwargs)
 
         frame = self.serial_number + ''.join(kwargs.values())
         frame = self._fill_frame(frame)
@@ -74,6 +79,40 @@ class Command_Constructor:
             kwargs['passwords'] = ''.join(p_list).ljust(16, 'f') * 4
 
         return self._construct_extended_command(**kwargs)
+
+    def ymd_to_hex(self, year, month, day):
+        """Encodes provided YMD into a 4hex value
+
+        Args:
+            year (Int): 'value between 0-199 representing years relative to 2000. Eg. 20 = 2020'
+            month (Int): 'value between 1-12 represents months'
+            day (Int): 'value between 1-31 represents days in month'
+
+        Returns:
+            ymd_hex (Str): '4 hex long encoded YMD'
+        """
+        b_year = format(year, '07b')  # 0 is padding, 7 is length, b is for byte.
+        b_month = format(month, '04b')
+        b_day = format(day, '05b')
+
+        return format(int(b_year+b_month+b_day, 2), '04x')  # x is lowercase hex
+
+    def hms_to_hex(self, hour, minute, second):
+        """Converts hms as ints to a 4 hex long string
+
+        Args:
+            hour (Int): 'value between 0-23'
+            minute (Int): 'value between 0-59'
+            second (Int): 'value between 0-29 as 2 second interval'
+
+        Returns:
+            hms_hex(Str): 'length of 8 character representation of HMS'
+        """
+        b_hour = format(hour, '05b')
+        b_minute = format(minute, '06b')
+        b_second = format(second, '05b')
+
+        return format(int(b_hour+b_minute+b_second, 2), '04x')
 
     def _construct_userframe(self, user_data):
         """Formats and appends the required data for adding users
@@ -133,6 +172,16 @@ class Command_Constructor:
         return int(val, 16).to_bytes(
             2, byteorder='little').hex()
 
+    def _card_to_hex(self, card):
+        card = card.zfill(8)
+        area_id = card[:3]
+        card_id = card[3:]
+
+        y = int(area_id).to_bytes(1, byteorder='little').hex()
+        x = int(card_id).to_bytes(2, byteorder='little').hex()
+        return x+y
+
+
     def _fill_frame(self, unf_frame, fill_char='0', frame_length=60):
         """Pads a frame with fill_char to length frame_length
 
@@ -160,56 +209,33 @@ class Command_Constructor:
         checksum = frame_sum.to_bytes(2, byteorder='little')
         return checksum.hex()
 
-    def ymd_to_hex(self, year, month, day):
-        """Encodes provided YMD into a 4hex value
 
-        Args:
-            year (Int): 'value between 0-199 representing years relative to 2000. Eg. 20 = 2020'
-            month (Int): 'value between 1-12 represents months'
-            day (Int): 'value between 1-31 represents days in month'
-
-        Returns:
-            ymd_hex (Str): '4 hex long encoded YMD'
-        """
-        b_year = format(year, '07b')  # 0 is padding, 7 is length, b is for byte.
-        b_month = format(month, '04b')
-        b_day = format(day, '05b')
-
-        return format(int(b_year+b_month+b_day, 2), '04x')  # x is lowercase hex
-
-    def hms_to_hex(self, hour, minute, second):
-        """Converts hms as ints to a 4 hex long string
-
-        Args:
-            hour (Int): 'value between 0-23'
-            minute (Int): 'value between 0-59'
-            second (Int): 'value between 0-29 as 2 second interval'
-
-        Returns:
-            hms_hex(Str): '4 hex long representation of HMS'
-        """
-        b_hour = format(hour, '05b')
-        b_minute = format(minute, '06b')
-        b_second = format(second, '05b')
-
-        return format(int(b_hour+b_minute+b_second, 2), '04x')
 
 
 class Door_Controller:
     # !README
     """ !!@!!WARNING: ORDER OF INPUT VARIABLES IS IMPORTANT TO PROPER COMMAND CREATION !!@!!
         REFERENCE EXISTING COMMANDS ORDER, ANY DOCS YOU CAN FIND, CONTACT NATE, 
-        WIRESHARK IT YOURSELF IF YOU HAVE A BOARD, OR CRY """
+        WIRESHARK IT YOURSELF IF YOU HAVE A PCB, OR CRY """
     def __init__(self, controller_id, address_byte='00', host='', port=62000):
         self.c = Command_Constructor(controller_id, address_byte)
         self.HOST = host
         self.PORT = port
 
     def upload_card_perms(self, card, password, permission='01'):
+        """Updates/uploads a user to the door controller
+
+        Args:
+            card (Int): User's card number 
+            password (Str): password
+            permission (Str, optional): The time profile. Defaults to '01'.
+
+        Returns:
+            Str: Constructed Command
+        """
         now = datetime.datetime.now()
-        # Dicts should keep their order, but I should verify that.
         command = {
-            'functionbytes': self.c.function_bytes_dict['modify_permissions'],
+            'functionbytes': self.c.function_bytes.modify_permissions,
             'e': '0100',  # Hardcoded
             'card': card,
             'doorNum': '01',  # Hardcoded : check if value is 01 at cyberia
@@ -218,7 +244,10 @@ class Door_Controller:
             'time': permission,
             'password': password
         }
-        return self.c.construct_command(**command)
+        # (functionbytes=c.function_bytes_dict['modify_permissions'], e='0100', card=card, doorNum='01', startYMD='2108', endYMD=c.ymd_to_hex(22, 12, 10), time=permission, password=passw)
+
+        x = self.c.construct_command(**command)
+        self.execute_command(x)
 
     def upload_one_time_passwords(self, passwords):
         # x & y are hardcoded settings. I haven't bothered to understand what they're doing they don't need to change.
@@ -241,27 +270,36 @@ class Door_Controller:
     def delete_everything_off_controller_are_you_sure_of_yourself(self):
     # This hard-resets all settings on the controller, except history which cannot be modified!
         command = {
-            'functionbytes': self.c.function_bytes_dict['clear_domain']
+            'functionbytes': self.c.function_bytes.clear_domain
         }
         command = self.c.construct_command(**command)
         return self.execute_command(command)
 
     def listen_for_card(self, known_cards):
-        command = c.construct_command(
-            functionbytes=c.function_bytes_dict['read_operation_status'])
+        command = self.c.construct_command(functionbytes=self.c.function_bytes.read_operation_status)
+            
+        def card_check(card):
+            card = card[34:40]
+            print(card, known_cards)
+            print((card not in known_cards))
+            if(card not in known_cards and card != '050000'):
+                return True
 
-        self.execute_command_until(command, (lambda x: x in known_cards))
+        # return self.execute_command(command) # [34:40]
+        self.execute_command_until(command, card_check, 1)
 
+    def listen_for_admin_code(self): #not done
+        command = self.c.construct_command(functionbytes=self.c.function_bytes.read_operation_status)
 
-    def listen_for_code(self, known_codes): #not done
-        command = self.c.construct_command(
-            functionbytes=self.c.function_bytes_dict['read_operation_status'])
+        def code_check(code):
+            """There's no way to check the specific code, so instead we're checking for built-in the super_admin user"""
+            code = code[34:40]
+            if(code == '050000'):
+                return True
 
-        self.execute_command_until(command, (lambda x: x in known_codes))
+        return self.execute_command_until(command, code_check, 24)
 
-
-
-    def upload_card_times(self, card, door, start_date, end_date, perm, password):
+    def upload_card_times(self, users):
         """Uploads times user's are permitted through door
 
         Args:
@@ -275,9 +313,11 @@ class Door_Controller:
         Returns:
             [type]: [description]
         """
-        # I don't even remember what this does. I think it's for setting user's time permissions?
-        users = [[card, door, start_date, end_date, perm, format(password, 'x')]]
-        return self.c.construct_extended_command(a='03', b='00', page='00', c='04', users=users)
+        final = [users[i * 32:(i + 1) * 32] for i in range((len(users) + 32 - 1) // 32 )] #split into list of list with len 32
+        for i, chunk in enumerate(final):
+            page = format(0, '02x')
+            command = self.c.construct_extended_command(a='03', b='00', page=page, c='04', users=users)
+            self.execute_command(command)
 
     def execute_command(self, command):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as sock:
@@ -288,63 +328,30 @@ class Door_Controller:
             sock.sendto(bytearray.fromhex(command), ('255.255.255.255', 60000))
             return sock.recv(1024).hex()
 
-    def execute_command_until(self, command, until):
+    def execute_command_until(self, command, until, hours_to_run):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            sock.bind((self.HOST, self.PORT))
+            sock.bind((self.HOST, self.PORT)) 
 
             # setup for listen_for_card. Not sure if other commands will need
             sock.sendto(bytearray.fromhex(command), ('255.255.255.255', 60000))
-            card = sock.recv(1024).hex()
+            untilVal = None
+            now = datetime.datetime.now()
 
-            while(until(card)):
+            while(not untilVal):
+                try:
+                    if(((datetime.datetime.now() - now).seconds/3600) >= hours_to_run):
+                        return None
+                except:
+                    pass
+
                 sock.sendto(bytearray.fromhex(command), ('255.255.255.255', 60000))
                 scanned = sock.recv(1024).hex()
-                card = scanned[34:40]
-                time.sleep(30)
-        return card
+                print(scanned)
+                untilVal = until(scanned)
+                time.sleep(5)
+        return untilVal
 
 
-
-
-
-
-
-
-    # card = listen_for_card(c, sock)
-
-    # cmd = upload_card_perms(c, card, '01', 5151)
-    # cmd = upload_card_times(c, card, '01', c.ymd_to_hex(20,1,1), c.ymd_to_hex(20,9,9), '01', 1234)
-
-
-def poll_card(c, sock):
-    userfoo = None
-    command = c.construct_command(
-        functionbytes=c.function_bytes_dict['read_operation_status'])
-    sock.sendto(bytearray.fromhex(command), ('255.255.255.255', 60000))
-
-    # [34:40] is location in string that contains last scanned card num
-    init_card = sock.recv(1024).hex()[34:40]
-    scanned_card = init_card
-    while(not userfoo):
-        sock.sendto(bytearray.fromhex(command), ('255.255.255.255', 60000))
-        scanned = sock.recv(1024).hex()
-        print(init_card)
-        print(userfoo)
-        print(scanned[34:40])
-        if(init_card != scanned[34:40]):
-            print('should be True')
-            userfoo = scanned[34:40]
-        time.sleep(5)
-
-    return userfoo
-
-
-if __name__ == "__main__":
-    main()
-
-
-# FIXME: Several functions have hardcoded or unique non-passed variables that need to be accounted for.
-# TODO: test each of these to ensure they work properly
-
+c = Door_Controller('e63a')

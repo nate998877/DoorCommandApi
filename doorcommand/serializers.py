@@ -1,5 +1,5 @@
 from rest_framework.serializers import HyperlinkedModelSerializer
-from doorcommand.models import *
+from doorcommand.models import NewUser
 
 class NewUserSerializer(HyperlinkedModelSerializer):
     class Meta:
